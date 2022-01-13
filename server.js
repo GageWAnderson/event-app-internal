@@ -1,4 +1,5 @@
 'use strict';
+// FNE : Added a useless comment
 
 // express is a nodejs web server
 // https://www.npmjs.com/package/express
