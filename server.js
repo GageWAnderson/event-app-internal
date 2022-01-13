@@ -5,8 +5,8 @@
 const express = require('express');
 
 // Get access to firestore database for events
-const {Firestore} = require('@google-cloud/firestore');
-const session = require('express-session');
+// const {Firestore} = require('@google-cloud/firestore');
+// const session = require('express-session');
 
 // converts content in the request into parameter req.body
 // https://www.npmjs.com/package/body-parser
@@ -27,17 +27,17 @@ app.use(function (req, res, next) {
 });
 
 // Connect to Firestore database in new session, express stores user sessions
-app.use(
-    session({
-        store: new FirestoreStore({
-            dataset: new Firestore(),
-            kind: 'express-sessions',
-        }),
-        secret: 'my-secret',
-        resave: false,
-        saveUninitialized: true,
-    })
-);
+// app.use(
+//     session({
+//         store: new FirestoreStore({
+//             dataset: new Firestore(),
+//             kind: 'express-sessions',
+//         }),
+//         secret: 'my-secret',
+//         resave: false,
+//         saveUninitialized: true,
+//     })
+// );
 
 // mock events data - for a real solution this data should be coming 
 // from a cloud data store
