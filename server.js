@@ -5,8 +5,7 @@
 const express = require('express');
 
 // Get access to firestore database for events
-// const {Firestore} = require('@google-cloud/firestore');
-// const session = require('express-session');
+const { Firestore } = require('@google-cloud/firestore');
 
 // converts content in the request into parameter req.body
 // https://www.npmjs.com/package/body-parser
@@ -20,32 +19,45 @@ app.use(bodyParser.json());
 
 // allow AJAX calls from 3rd party domains
 app.use(function (req, res, next) {
-	res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Origin", "*");
     res.header('Access-Control-Allow-Methods', 'PUT, POST, PATCH, MERGE, GET, DELETE, OPTIONS');
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
     next();
 });
 
-// Connect to Firestore database in new session, express stores user sessions
-// app.use(
-//     session({
-//         store: new FirestoreStore({
-//             dataset: new Firestore(),
-//             kind: 'express-sessions',
-//         }),
-//         secret: 'my-secret',
-//         resave: false,
-//         saveUninitialized: true,
-//     })
-// );
+// Connect to Firestore database, set project ID from env vars
+const firestore = new Firestore({
+    projectId: process.env.GOOGLE_CLOUD_PROJECT,
+});
 
-// mock events data - for a real solution this data should be coming 
-// from a cloud data store
-const mockEvents = {
+// Return when firestore returns an empty snapshot
+const noEventsYet = {
     events: [
-        { title: 'an event', id: 1, description: 'something really cool' },
-        { title: 'another event', id: 2, description: 'something even cooler' }
+        { title: 'No events yet!', id: 1, description: 'Add an event below.' },
     ]
+};
+
+// Return when Firestore call throws an error
+const eventError = {
+    events: [
+        { title: 'ERROR', id: 1, description: 'Firestore could not be contacted' },
+    ]
+};
+
+function getEvents(req, res) {
+    firestore.collection("Events").get().then((snapshot) => {
+        if (!snapshot.empty) {
+            const ret = { events: [] };
+            snapshot.docs.forEach(elem => {
+                ret.events.push(elem.data());
+            }, this);
+            res.json(ret);
+        } else {
+            res.json(noEventsYet);
+        }
+    }).catch((err) => {
+        res.json(eventError);
+    })
 };
 
 // health endpoint - returns an empty array
@@ -61,24 +73,39 @@ app.get('/version', (req, res) => {
 // mock events endpoint. this would be replaced by a call to a datastore
 // if you went on to develop this as a real application.
 app.get('/events', (req, res) => {
-    res.json(mockEvents);
+    getEvents(req, res);
 });
 
-// Adds an event - in a real solution, this would insert into a cloud datastore.
-// Currently this simply adds an event to the mock array in memory
-// this will produce unexpected behavior in a stateless kubernetes cluster. 
+// Adds an event to Firestore database
 app.post('/event', (req, res) => {
     // create a new object from the json data and add an id
-    const ev = { 
-        title: req.body.title, 
+    const event = {
+        title: req.body.title,
         description: req.body.description,
-        id : mockEvents.events.length + 1
-     }
-    // add to the mock array
-    mockEvents.events.push(ev);
-    // return the complete array
-    res.json(mockEvents);
+        id: noEventsYet.events.length + 1
+    }
+
+    // Create events collection in Firestore if it doesn't yet exist
+    // Then get the updated event list back from Firestore
+    firestore.collection("Events").add(event).then(ret => {
+        getEvents(req, res);
+    });
 });
+
+app.delete('/event', (req, res) => {
+    const event = {
+        title: req.body.title,
+        description: req.body.description,
+        id: req.body.id,
+    };
+
+    firestore.collection("Events").delete(event).then(ret => {
+        getEvents(req, res);
+    }).catch((err) => {
+        console.log(`err = ${err}`);
+        getEvents(req, res);
+    })
+})
 
 app.use((err, req, res, next) => {
     console.error(err.stack);
